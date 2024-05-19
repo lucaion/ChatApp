@@ -1,0 +1,2 @@
+{"body":"{\r\n    \"name\": \"\",\r\n    \"name\": \"\",\"name\": \"\",\r\n}","expose":true,"level":"error","status":400,"statusCode":400,"type":"entity.parse.failed"}
+{"body":"{\r\n    \"name\": \"admin\",\r\n    \"email\": \"admin@test.com\",\r\n    \"password\": \"parolaadmin\",\r\n    \"role\": \"admin\",\r\n}","expose":true,"level":"error","status":400,"statusCode":400,"type":"entity.parse.failed"}
