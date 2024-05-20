@@ -1,4 +1,6 @@
 const User = require("../models/User");
+const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
 
 exports.getUser = async (req, res) => {
     try {
@@ -15,7 +17,7 @@ exports.getUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
     const { userId } = req.params;
     const { name, role, password } = req.body;
-    const currentUser = req.user; // Assuming you have the current user information stored in req.user
+    const currentUser = req.user;
     let isAllowed = false;
 
     if (currentUser._id.toString() === userId || currentUser.role === "admin") {
@@ -65,9 +67,36 @@ exports.updateUser = async (req, res) => {
 };
 
 exports.deleteUser = async (req, res) => {
+    const { userId } = req.params;
+    const currentUser = req.user;
     try {
+        if (
+            currentUser.role !== "admin" &&
+            currentUser._id.toString() !== userId
+        ) {
+            return res.status(403).json({
+                message: "You are not authorized to perform this action",
+            });
+        }
+        // Delete user's messages
+        await Message.deleteMany({ sender: userId });
+
+        // Find conversations where the user is a participant along with another user
+        const conversations = await Conversation.find({
+            participants: userId,
+        });
+
+        for (const conversation of conversations) {
+            if (conversation.participants.length === 2) {
+                await conversation.deleteOne();
+            } else {
+                conversation.participants.pull(userId);
+                await conversation.save();
+            }
+        }
+
         await User.findByIdAndDelete(req.params.userId);
-        res.json({ message: "User deleted successfully" });
+        res.status(200).json({ message: "User deleted successfully" });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }

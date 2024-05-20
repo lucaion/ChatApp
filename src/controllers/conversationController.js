@@ -1,15 +1,52 @@
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const Joi = require("joi");
 
 exports.createConversation = async (req, res) => {
-    const { participantIds } = req.body;
+    const currentUser = req.user;
 
     try {
+        const request = Joi.object({
+            participantIds: Joi.array()
+                .items(Joi.string().required())
+                .required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { participantIds } = value;
+
         if (!Array.isArray(participantIds) || participantIds.length < 2) {
             return res.status(400).json({
                 message:
                     "At least two participants are required to create a conversation",
+            });
+        }
+
+        if (!participantIds.includes(currentUser._id.toString())) {
+            return res.status(403).json({
+                message: "You are not authorized to create this conversation",
+            });
+        }
+        console.log(
+            "Searching for existing conversation with participants:",
+            participantIds
+        );
+
+        const existingConversation = await Conversation.findOne({
+            participants: { $all: participantIds },
+            $expr: { $eq: [{ $size: "$participants" }, participantIds.length] },
+        });
+
+        if (existingConversation) {
+            return res.status(409).json({
+                message: "Conversation with these participants already exists",
+                existingConversation,
             });
         }
 
@@ -35,12 +72,24 @@ exports.createConversation = async (req, res) => {
 };
 
 exports.getConversation = async (req, res) => {
+    const currentUser = req.user;
+
     try {
-        const conversation = await Conversation.findById(
-            req.params.conversationId
-        )
+        let query = {};
+
+        if (currentUser.role !== "admin") {
+            query = {
+                _id: req.params.conversationId,
+                participants: currentUser._id,
+            };
+        } else {
+            query = { _id: req.params.conversationId };
+        }
+
+        const conversation = await Conversation.findOne(query)
             .populate("participants", "name")
             .populate("messages");
+
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
         }
@@ -52,14 +101,26 @@ exports.getConversation = async (req, res) => {
 
 exports.updateConversation = async (req, res) => {
     const { conversationId, participantId } = req.body;
+    const currentUser = req.user;
+
     try {
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
         }
 
+        const isParticipant = conversation.participants.some((participant) =>
+            participant.equals(currentUser._id)
+        );
+        if (!isParticipant) {
+            return res.status(403).json({
+                message: "You are not a participant of this conversation",
+            });
+        }
+
         conversation.participants.push(participantId);
         await conversation.save();
+
         res.json({ message: "Participant added successfully" });
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -67,7 +128,28 @@ exports.updateConversation = async (req, res) => {
 };
 
 exports.deleteConversation = async (req, res) => {
+    const currentUser = req.user;
+
     try {
+        const conversation = await Conversation.findById(
+            req.params.conversationId
+        );
+        if (!conversation) {
+            return res.status(404).json({ message: "Conversation not found" });
+        }
+
+        // Check if the current user is an admin or a participant of the conversation
+        if (
+            currentUser.role !== "admin" &&
+            !conversation.participants.some((participant) =>
+                participant.equals(currentUser._id)
+            )
+        ) {
+            return res.status(403).json({
+                message: "You are not authorized to delete this conversation",
+            });
+        }
+
         await Conversation.findByIdAndDelete(req.params.conversationId);
         await Message.deleteMany({ conversation: req.params.conversationId });
         res.json({ message: "Conversation deleted successfully" });

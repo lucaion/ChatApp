@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const deleteUserMessagesAndConversations = require("../middlewares/userDeletionMiddleware");
 
 const UserSchema = new mongoose.Schema(
     {
@@ -26,15 +25,6 @@ const UserSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
-
-UserSchema.pre("remove", async function (next) {
-    try {
-        await deleteUserMessagesAndConversations(this);
-        next();
-    } catch (error) {
-        next(error);
-    }
-});
 
 const User = mongoose.model("User", UserSchema);
 module.exports = User;

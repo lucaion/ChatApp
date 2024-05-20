@@ -1,10 +1,24 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const Joi = require("joi");
 
 exports.register = async (req, res) => {
-    const { name, email, password } = req.body;
     try {
+        const request = Joi.object({
+            name: Joi.string().required(),
+            email: Joi.string().email().required(),
+            password: Joi.string().min(8).required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { name, email, password } = value;
+
         // Check if user with the same email already exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -32,10 +46,23 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-    const { email, password } = req.body;
     try {
+        const request = Joi.object({
+            email: Joi.string().email().required(),
+            password: Joi.string().min(8).required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { email, password } = value;
+
         // Find user by email
         const user = await User.findOne({ email });
+
         if (!user) {
             return res
                 .status(401)
