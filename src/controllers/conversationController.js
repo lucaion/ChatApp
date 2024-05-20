@@ -33,10 +33,6 @@ exports.createConversation = async (req, res) => {
                 message: "You are not authorized to create this conversation",
             });
         }
-        console.log(
-            "Searching for existing conversation with participants:",
-            participantIds
-        );
 
         const existingConversation = await Conversation.findOne({
             participants: { $all: participantIds },
