@@ -89,6 +89,7 @@ exports.getConversation = async (req, res) => {
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
         }
+
         res.json(conversation);
     } catch (error) {
         res.status(400).json({ error: error.message });

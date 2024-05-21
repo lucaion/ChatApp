@@ -1,11 +1,24 @@
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
+const Joi = require("joi");
 
 exports.sendMessage = async (req, res) => {
-    const { recipientIds, content } = req.body;
     const currentUser = req.user;
     try {
+        const request = Joi.object({
+            recipientIds: Joi.array().items(Joi.string().required()).required(),
+            content: Joi.string().required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { recipientIds, content } = value;
+
         if (recipientIds.includes(currentUser._id)) {
             return res.status(400).json({
                 message: "You cannot send a message to yourself",
@@ -93,9 +106,21 @@ exports.updateMessage = async (req, res) => {
             });
         }
 
+        const request = Joi.object({
+            content: Joi.string().required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { content } = value;
+
         const updatedMessage = await Message.findByIdAndUpdate(
             req.params.messageId,
-            req.body,
+            content,
             { new: true }
         );
 
