@@ -97,11 +97,12 @@ exports.getConversation = async (req, res) => {
 };
 
 exports.updateConversation = async (req, res) => {
-    const { conversationId, participantId } = req.body;
     const currentUser = req.user;
 
     try {
-        const conversation = await Conversation.findById(conversationId);
+        const conversation = await Conversation.findById(
+            req.params.conversationId
+        );
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
         }
@@ -109,9 +110,32 @@ exports.updateConversation = async (req, res) => {
         const isParticipant = conversation.participants.some((participant) =>
             participant.equals(currentUser._id)
         );
+
         if (!isParticipant) {
             return res.status(403).json({
                 message: "You are not a participant of this conversation",
+            });
+        }
+
+        const request = Joi.object({
+            participantId: Joi.string().required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { participantId } = value;
+
+        const isAlreadyParticipant = conversation.participants.some(
+            (participant) => participant.equals(participantId)
+        );
+
+        if (isAlreadyParticipant) {
+            return res.status(400).json({
+                message: "Participant is already in the conversation",
             });
         }
 
@@ -150,6 +174,71 @@ exports.deleteConversation = async (req, res) => {
         await Conversation.findByIdAndDelete(req.params.conversationId);
         await Message.deleteMany({ conversation: req.params.conversationId });
         res.json({ message: "Conversation deleted successfully" });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
+exports.deleteParticipant = async (req, res) => {
+    const currentUser = req.user;
+
+    try {
+        const conversation = await Conversation.findById(
+            req.params.conversationId
+        );
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Conversation not found" });
+        }
+
+        const isParticipant = conversation.participants.some((participant) =>
+            participant.equals(currentUser._id)
+        );
+
+        if (!isParticipant && currentUser.role !== "admin") {
+            return res.status(403).json({
+                message:
+                    "You are not authorized to remove participants from this conversation",
+            });
+        }
+
+        const request = Joi.object({
+            participantId: Joi.string().required(),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { participantId } = value;
+
+        const userToBeRemoved = await User.findById(participantId);
+
+        if (!userToBeRemoved) {
+            return res
+                .status(404)
+                .json({ message: "User to be removed not found" });
+        }
+
+        const isUserParticipant = conversation.participants.some(
+            (participant) => participant.equals(participantId)
+        );
+
+        if (!isUserParticipant) {
+            return res.status(400).json({
+                message: "User is not a participant of this conversation",
+            });
+        }
+
+        conversation.participants = conversation.participants.filter(
+            (participant) => !participant.equals(participantId)
+        );
+
+        await conversation.save();
+
+        res.json({ message: "Participant removed successfully" });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }

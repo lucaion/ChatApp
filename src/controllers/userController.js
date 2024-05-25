@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
+const Joi = require("joi");
 
 exports.getUser = async (req, res) => {
     try {
@@ -15,45 +16,51 @@ exports.getUser = async (req, res) => {
 };
 
 exports.updateUser = async (req, res) => {
-    const { userId } = req.params;
-    const { name, role, password } = req.body;
     const currentUser = req.user;
-    let isAllowed = false;
-
-    if (currentUser._id.toString() === userId || currentUser.role === "admin") {
-        isAllowed = true;
-    }
 
     try {
         // Find the user by userId
-        const user = await User.findById(userId);
+        const user = await User.findById(req.params.userId);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
         // Check if the current user is the same as the user being updated or an admin
-        if (!isAllowed) {
+        if (
+            currentUser._id.toString() !== req.params.userId &&
+            currentUser.role !== "admin"
+        ) {
             return res.status(403).json({
                 message: "You are not authorized to perform this action",
             });
         }
 
+        const request = Joi.object({
+            name: Joi.string(),
+            role: Joi.string(),
+            password: Joi.string().min(8),
+        });
+
+        const { error, value } = request.validate(req.body);
+
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { name, role, password } = value;
+
         // Update user name if allowed
-        if (name && isAllowed) {
+        if (name) {
             user.name = name;
         }
 
         // Update user role if allowed
         if (role && currentUser.role === "admin") {
             user.role = role;
-        } else {
-            return res.status(403).json({
-                message: "You are not authorized to perform this action",
-            });
         }
 
         // Update password if allowed
-        if (password && isAllowed) {
+        if (password) {
             const hashedPassword = await bcrypt.hash(password, 10);
             user.password = hashedPassword;
         }
@@ -99,5 +106,14 @@ exports.deleteUser = async (req, res) => {
         res.status(200).json({ message: "User deleted successfully" });
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+};
+
+exports.getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find();
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };
